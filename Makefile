@@ -14,4 +14,4 @@ SHELL := bash
 
 ./.venv:
 	python3 -m venv -- '$@'
-	'$@'/*/python -m pip install -- lookatme
+	'$@'/*/python -m pip install -- gay lookatme
