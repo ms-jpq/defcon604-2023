@@ -1,130 +1,235 @@
-#!/usr/bin/env -S -- lookatme --theme light
+# Structured Shell Programming (Recursions, Lambdas, Functional Paradigms)
 
-# Bash for Advanced Dummies
+**`SHELL` is most effective language you will ever learn**
 
-## about:me
-
-```bash
-> whoami
-Wang, Hao
-
-> whois
-https://github.com/ms-jpq
-```
+All the code plus the original defcon604 slides are available at [my github](https://github.com/ms-jpq/defcon604-2023)
 
 ---
 
-## My Projects
+## Why so effective?
 
-### CLI
+`SHELL` is **brutally** _high level_
 
-```bash
-pip3 install -- gay
+#### Haskell?
 
-cowsay hello defcon | gay
-```
-
-```bash
-brew install -- sad
-
-find | sad systemd flamebait
-```
-
-### Vim
-
-```
-https://github.com/preservim/nerdtree -> https://github.com/ms-jpq/chadtree
-https://github.com/neoclide/coc.nvim  -> https://github.com/ms-jpq/coq_nvim
-```
-
----
-
-## High Level Language
-
-What is the building block?
-
-### Haskell?
-
-Functions
+Building block: _Functions_
 
 ```haskell
 functions . pointfree . compose
 ```
 
-### Bash
+#### Shell
 
-Programs
+Building block: _Programs_
 
 ```bash
-program | program  | program
+process1 | process2 | process3
 ```
+
+---
+
+## Recursive Bash HTTP Server
+
+For pedagogical purposes, this is my favorite program.
+
+```bash
+#!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
+
+set -o pipefail
+
+ADDR='127.0.0.1'
+PORT='8888'
+if [[ -t 0 ]]; then
+  printf -- '%q ' curl -- "http://$ADDR":"$PORT"
+  printf -- '\n'
+  exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"
+fi
+
+tee <<-EOF
+HTTP/1.1 200 OK
+
+EOF
+
+printf -- '%s\n' 'HELO' >&2
+exec -- cat -- "$0"
+```
+
+---
+
+## Why so effective?
+
+`SHELL` is **brutally** _straight forward_
+
+---
+
+## What is Shell Programming
+
+There is a distinct difference between **written in** shell and written **for shell**.
+
+Shell programming is characterized by _process composition_ as much as say functional programming is characterized by _function composition_.
+
+Indeed, just as it is possible to write Java in any language, it is also possible to write shell programs in any language. [Scroll to the end]() to see the same basic shell program in 15 different languages, along with some remarks on each.
+
+### Homoplasies to Functional Programming & RAII (in the Rust sense)
+
+This part is pretty boring compared to **recursion**.
+
+Read it at the end [here]().
+
+<figure>
+  <img src="https://github.com/ms-jpq/defcon604-2023/blob/main/pics/homology.png?raw=true">
+  <figcaption>
+    yes I know <code>homology &lt;&gt; homoplasy</code>, but <code>homology</code> has prettier illustrations
+  <figcaption>
+</figure>
 
 ---
 
 ## Recursion
 
-HTTP server
+_Who the fuck_ uses shell recursion on a daily basis?
+
+Probably **((you))**, if you use `SSH`.
+
+SSH spawns the login shell on the server, and passes whitespace joined arguments verbatim from client to server.
 
 ```bash
-./1-http-server.sh
+# Typical interactive SSH usage
+shell | ssh->sshd | shell
 ```
 
-1. `$0` is the script's own name
+Even if most interactive uses of `SSH` passes zero arguments, the trivial recursion from your shell to the remote shell still takes place.
 
-2. `[[ -t 0 ]]` test of stdin connected to `tty`
+But before we do something useful, let's do something fun instead :)
 
-3. HTTP clients don't care about `\r` carriage return
+### HTTP Server
 
----
+Here is a toy script that prints `HELO` on console and forwards its own content to any HTTP client
 
-## Can't afford AWS lambda?
-
-```systemd
-[Socket]
-Accept       = yes
-```
-
-```systemd
-[Unit]
-CollectMode    = inactive-or-failed
-[Service]
-Type           = oneshot
-StandardInput  = socket
-StandardOutput = socket
-```
-
----
-
-## Mutual Recursion
+Try it via both your browser and `curl`!
 
 ```bash
-./2-git-ls-d.sh
+#!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
 
-cat -- ./2-git-ls-d.sh ./2-fzf-lr.sh
+set -o pipefail
+
+ADDR='127.0.0.1'
+PORT='8888'
+if [[ -t 0 ]]; then
+  printf -- '%q ' curl -- "http://$ADDR":"$PORT"
+  printf -- '\n'
+  exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"
+fi
+
+tee <<-EOF
+HTTP/1.1 200 OK
+
+EOF
+
+printf -- '%s\n' 'HELO' >&2
+exec -- cat -- "$0"
 ```
 
-0. We do this all the time
+#### Observations
 
-1. `$SHELL` → ssh → `$SHELL`
+##### Exploiting the Postel's law
 
-2. - ASCII SEP, i.e. `\4`, `\0` etc
+`be conservative in what you do, be liberal in what you accept from others`
+
+1. `HTTP/1` is TCP + `HTTP` headers + newline + body
+
+2. The specified `\r` in `\r\n` in HTTP protocol isn't required in practice, when most clients are written to accept a liberal interpretation of it
+
+3. Think, the UNIX world of (in)formal protocols
+
+##### `$0`
+
+1. The first argument of a process (`$0`) is conventionally, their own name. This works in almost all languages, on all `OS` (yes even in Microsoft land).
+
+2. Recursion is performed via `$0`, which is almost always present, for example `python` wouldn't even let you call [`os.exec*`]() without it.
+
+3. Famously `busybox` is a multi-call binary that distills many `gnu-coreutils` into a single executable based on invocations of `$0`
+
+### Back to SSH
+
+#### Recursive arguments
+
+Notice in the HTTP example, there is a peculiar `printf` format: `%q`
+
+If we were to look up `printf(1)` in the `glibc`, consepectiously, there is no `%q`.
+
+As it turns out, `%q` is a `bash` / `gnu` extension to `printf` that transforms a string into a format that when evulated under the `posix` shell syntax, expands to it's own (logical) identity.
+
+i.e. built for recursive evulation.
+
+### Emgenrent Protocol -- Posix SH
+
+Similar to how the ubiquity of C made its `.h` headers the universal FFI API, the ubiquity of the `int system(const char *command)` has made the `posix` shell an accidental API in of itself.
+
+Basically, for any given `unix` program, if it has an mechanism for spawning processes, chances are, the arguments to the parent program are carried over more or less verbatim into
+the system shell.
+
+i.e.
+
+- [`ssh -o ProxyCommand=...`](ssh_config)
+
+- [`rsync --rsh ...`](rsync)
+
+- [`fzf --preview ...`](fzf)
+
+- [`fzf --execute ...`](fzf)
+
+**Never quote by hand**, especially for nested recursions
+
+<summary>
+<detail>
+</detail>
+</summary>
+
+##### Bash
+
+builtin quoting for recursion
 
 ```bash
-man -- ascii
-cowsay hello defcon | gay | command -- cat -v
+printf -- '%q ' $'\n ' '#$123' '\@!-_'
+# $'\n'\  \#\$123 \\@\!-_
 ```
 
-3. - `printf -- '%q '` quoting
+##### Python
 
-```bash
-printf -- '%q ' $'\n' '#$123' '\@!-_'
+Python's `shlex` in stdlib outputs more legible outputs
+
+```python
+from shlex import join
+
+print(join(("\n ", "#$123", r"\@!-_")))
+# '
+#  ' '#$123' '\@!-_'
 ```
 
-4. Never quote by hand
+##### Ruby
 
----
+You can really see the `perl` heritage here, both in syntax and in library names.
 
-## Powershell
+```ruby
+require 'shellwords'
+
+require 'shellwords'
+
+puts %W[\n#{' '} \#$123 \\@!-_].map(&:shellescape).join ' '
+# '
+# '\  \#\$123 \\@\!-_
+```
+
+### What about NT?
+
+There is little support for quoting `cmd.exe` grammar.
+
+Powershell is ubiqitious enough though...
+
+##### Powershell
+
+Wow, such Microsoft, much `UTF16-LE`, very `BASE64`.
 
 ```ps1
 # UTF16-LE
@@ -140,180 +245,136 @@ $argv = @(
 )
 ```
 
----
+## You can write ~~Java~~ Shell in any language
 
-## X"00"
+I have written the same basic shell program in 15 languages, with
 
-```bash
-printf -- '%s\n' "$PATH"
+## prolog
 
-./3-echo.cob
+- `++++` Cool as shit
 
-cat -- ./3-echo.cob
-```
+- `++` Fast interpertor spin up
 
-1. `cobol` calls into `c` `"getenv"`
+- `+` Shares the same (yes -> continue / no -> abort) execution model as `bash -eux -o pipefail ...`
 
-2. `CString` can't contain `\0` → File paths can't contain `\0` either.
+- `+` `DCG` is vastly more superior to `regex` for parsing complex grammar, esp with recursion
 
----
+- `-` Poor tooling
 
-## More Comments
+- `---` Good luck using it in prod
 
-non sequitur
+## python
 
-```bash
-# Scripting in swift
-./3-echo.swift
+- `+++++` Legendary stdlib
 
-# Change JULIA_DEPOT_PATH to random location
-./3-echo.jl
+- `+++` Best built-in argument parser of any language
 
-cat -- ./3-echo.swift ./3-echo.jl
-```
+- `++` Excellent tooling
 
----
+- `-` Poor pipelining support
 
-## `-> | while | ->`
+## clojure
 
-```bash
-cat -- ./2-git-ls-d.sh
+- `+++` Beautiful language
 
-"${ARGV[@]}" | while read -d '' -r LINE; do
-  if [[ -z "$LINE" ]]; then
-    HEAD=1
-    continue
-  fi
-  if ((HEAD)); then
-    SHA_TIME="${LINE%%$'\n'*}"
-    LINE="${LINE#*$'\n'}"
-    HEAD=0
-  fi
-  printf -- '%s\n%s\0' "$SHA_TIME" "$LINE"
-done | "${0%/*}/2-fzf-lr.sh" "$0"
-```
+- `-` Shell programming is orthogonal to Clojure's strengths
 
-1. Notice how the `while loop` act like a program
+- `--` Slow JVM spin up
 
-2. Almost all shell builtins act like programs
+## perl
 
-3. Branching is done via exit codes
+- `+++` Available almost anywhere `bash` is
 
-```bash
-[[ -x ./README.md ]] && printf -- '%s\n' $?
+- `++` Cool boomercore language.
 
-[[ -d ./README.md ]] || printf -- '%s\n' $?
-```
+- `--` Unicode support hidden behind flags, so nobody uses them, especially in shebangs.
 
----
+## ruby
 
-## Do one thing
+- `+++` Most powerful built-in templating of any language (erb).
 
-```bash
-set -Eeu
-set -o pipefail
-```
+- `++` Passable stdlib, including decent pipelining & rake (ruby's Make)
 
-1. exit `0` is success
+- `++` More sane version of `perl`
 
-2. exit `!0` is failure
+- `-` Working with raw bytes an after thought
 
-```txt
-command -- tree -- 4-pipeline
-```
+## nodejs
 
-3. enforce using [shellcheck](https://www.shellcheck.net/)
+- `+++` Stream oriented + `async function*`
 
-4. `.shellcheckrc` `enable=all`
+- `++` Fast interpertor spin up
 
----
+- `---` Stdlib is sucky
 
-## autodie
+## powershell
 
-```bash
-if ! [[ -v RECUR ]]; then
-  if RECUR=1 "$0" "$@"; then
-    # success!
-  else
-    # failed!
-  fi
-fi
-```
+- `++` Access to `.NET` stdlib
 
----
+- `-` Poor tooling
 
-## Data type
+- `---` SLOW as hell interpertor spin up for a shell language
 
-Lines & Fields
+## fsharp
 
-```bash
-# these comes by default on macOS
-# apt install -- athena-jot rs
+- `--` Enterprisy stdlib
 
-jot -r 100
+- `+` Pretty decent tooling actually
 
-jot -r 100 | rs 20 5
-jot -r 100 | rs 5 20
+## haskell
 
-jot -r 100 | rs 10 10 | sort -n -k 2
-```
+- `++` Beautiful language.
 
-- `cut`, `awk`, `perl`, `ruby`, `numfmt`
+- `--` Form over function
 
-- `$IFS`
+- `---` Really slow compile time when running via shebang
+
+## lua
+
+## R
+
+## php
+
+- `--` Is `php`
+
+## rust
+
+- `+` If it passes `#![deny(clippy::all, clippy::pedantic)]`, it work good
+
+- `---` Only ever going to be used to make `build.rs` executable
+
+## kotlin
+
+- `-----` Some how slower than julia at `Hello World`
 
 ---
 
-## "$PATH"
+## λ
 
-`https://xkcd.com/927/`
+---
 
-```bash
-./3-echo.cob | tr -- ':' '\n'
+## Homoplasies
+
+### RAII
+
+### Referential Transparency
+
+## Systemd Socket Programming
+
+```systemd
+[Socket]
+Accept      = yes
 ```
 
-1. Every OS has 1 or more clipboards
-
-2. I want to write a one that works over SSH connections
-
-```bash
-type -a -- pbcopy
-# https://github.com/ms-jpq/isomorphic_copy
+```systemd
+[Unit]
+CollectMode = inactive-or-failed
+[Service]
+Type        = oneshot
 ```
 
 ---
 
-## Windows
+## Acknowledgements
 
-Useful to share CI scripts
-
-There is about 20 different bashes on Windows, mostly from `msys2 / cygwin` derivatives
-
-```ps1
-# Github CI
-Get-Command -All -- bash
-```
-
-- `C:\Program Files\Git\bin\bash.exe`
-
-- `C:\Windows\system32\bash.exe`
-
-- `C:\Program Files\Git\usr\bin\bash.exe`
-
-...
-
-1. Convert between NT and UNIX paths using `cygpath`
-
----
-
-## Don't have to write in bash
-
-```bash
-printf -- '%q\0' ./5-helo/* | xargs -0 -L1 -- time
-```
-
----
-
-## Slides / Scripts
-
-[https://github.com/ms-jpq/defcon604-2023](https://github.com/ms-jpq/defcon604-2023)
+Thank you so much to my employer [Graveflex]() and especially my Boss (with capital B) [Lynn Hurley]() for providing an environment where I was able to nature my skills as a programmer :).

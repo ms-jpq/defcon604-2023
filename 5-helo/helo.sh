@@ -6,4 +6,4 @@ SH="$PWD/$0"
 cd -- "${0%/*}"
 
 printf -- '%s\n' "HELO :: VIA -- ${0##*/}"
-bat -- "$SH"
+cat -- "$SH"

@@ -2,11 +2,12 @@
 
 set -o pipefail
 
-PORT='8080'
+ADDR='127.0.0.1'
+PORT='8888'
 if [[ -t 0 ]]; then
-  printf -- '%q ' curl -- localhost:"$PORT"
+  printf -- '%q ' curl -- "http://$ADDR":"$PORT"
   printf -- '\n'
-  exec -- socat TCP-LISTEN:"$PORT",reuseaddr,fork EXEC:"$0"
+  exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"
 fi
 
 tee <<-EOF
@@ -14,5 +15,5 @@ HTTP/1.1 200 OK
 
 EOF
 
-cowsay -- 'Hello DEFCON' | gay >&2
+printf -- '%s\n' 'HELO' >&2
 exec -- cat -- "$0"
