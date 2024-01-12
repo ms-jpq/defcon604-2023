@@ -28,7 +28,7 @@ process1 | process2 | process3
 
 ---
 
-## Recursive Bash HTTP Server
+## Case Study: Recursive Bash HTTP Server
 
 For pedagogical purposes, this is my favorite program.
 
