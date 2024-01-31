@@ -1,14 +1,8 @@
 # Structured Shell Programming (Recursions, Lambdas, Functional Paradigms)
 
-**`SHELL` is most effective language you will ever learn**
-
 All the code plus the original defcon604 slides are available at [my github](https://github.com/ms-jpq/defcon604-2023)
 
----
-
-## Why so effective?
-
-`SHELL` is **brutally** _high level_
+The proposition is simple: **`SHELL` is the most effective programming technique** you can learn, because it's based on **process composition**, it necessarily works at a **higher level** than say compared to even Haskell.
 
 #### Haskell?
 
@@ -26,11 +20,13 @@ Building block: _Programs_
 process1 | process2 | process3
 ```
 
+My goals in this essay isn't to explore the quirks of the `SHELL` programming languages, of which there are many. Rather, this is a distillation of the useful **semantics of process composition**.
+
 ---
 
 ## Case Study: Recursive Bash HTTP Server
 
-For pedagogical purposes, this is my favorite program.
+For pedagogical purposes, this is my favorite program. I will break down the _interesting bits_.
 
 ```bash
 #!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
@@ -45,7 +41,7 @@ if [[ -t 0 ]]; then
   exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"
 fi
 
-tee <<-EOF
+tee <<-'EOF'
 HTTP/1.1 200 OK
 
 EOF
@@ -54,11 +50,88 @@ printf -- '%s\n' 'HELO' >&2
 exec -- cat -- "$0"
 ```
 
----
+#### `#!`: shebang
 
-## Why so effective?
+```bash
+#!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
+```
 
-`SHELL` is **brutally** _straight forward_
+- In UNIX systems, `#!` are the magic bytes that denote executable scripts, and it leads to a path i.e. `/usr/bin/env` as the script interpreter. This is fairly well known.
+
+- This isn't all that interesting, but it is underutilized that you pay pass arguments to the script interpreter as well. For example, passing in `perl -CAS` to enable greater unicode support.
+
+#### `[[ -t 0 ]]`: is stdin `(fd 0)` a terminal?
+
+- The recursion works by checking if the script is run from the terminal, if so, the script re-spawns itself under a subprocess of `socat`, in which it is no longer attached to the terminal.
+
+- The terminal is actually a fairly important concept for in shell programming, as it is the `$SHELL` itself. It poses some **interesting questions**:
+
+1.  - On `ASCII` and strings: How do you _delete_ a character from the terminal, if the terminal is **just another process**? Surely `stdin` is _append only_.
+
+    - As it turns out, `ASCII` has multiple deletion characters: `BS` and `DEL`, what's better, it even has a `BEL` character that will blink your terminal.
+
+2.  - So are strings really just text? Or should we view them as _instruction streams_?
+
+    - The latter mental model should prove more fruitful for shell programming.
+
+#### `printf -- '%q '`: What kind of format is `%q`?
+
+Two things are true:
+
+1.  Recursion is difficult without argument passing.
+
+2.  It is difficult to manually quote arguments in `$SHELL` languages.
+
+The _one-liner solution_:
+
+`%q ` **quotes arguments** to `printf` such that they can **POSIX `SHELL` expand back to their original input**.
+
+This feature is not unique to `bash` and `zsh`. We can examine a few similar facilities to reveal their design philosophies:
+
+- **Python**: The quoted string is the most legible of the bunch.
+
+- **Ruby**: You can really see the `perl` heritage here, both in syntax and in library names.
+
+```python
+from shlex import join
+
+print(join(("\n ", "#$123", r"\@!-_")))
+# '
+#  ' '#$123' '\@!-_'
+```
+
+```ruby
+require 'shellwords'
+
+puts %W[\n#{' '} \#$123 \\@!-_].map(&:shellescape).join ' '
+# '
+# '\  \#\$123 \\@\!-_
+```
+
+- **Bash**: Note the quoted string contains **no line breaks**, unlike `python` and `ruby`. This is essential, since `bash` like other `$SHELL` languages is fundamentally **line / record oriented**. Line breaks have a special significance in `$SHELL`.
+
+```bash
+printf -- '%q ' $'\n ' '#$123' '\@!-_'
+# $'\n'\  \#\$123 \\@\!-_
+```
+
+- **PowerShell**: Wow, such Microsoft, much `UTF16-LE`, very `BASE64`, and yes, it can recursively quote itself for execution as well.
+
+```ps1
+# UTF16-LE
+$pwsh = @"
+...
+"@
+$argv = @(
+  'powershell.exe'
+  '-NoProfile'
+  '-NonInteractive'
+  '-WindowStyle', 'Hidden'
+  '-EncodedCommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($pwsh))
+)
+```
+
+#### `exec -- socat`: Back to HTTP server
 
 ---
 
@@ -101,34 +174,6 @@ shell | ssh->sshd | shell
 Even if most interactive uses of `SSH` passes zero arguments, the trivial recursion from your shell to the remote shell still takes place.
 
 But before we do something useful, let's do something fun instead :)
-
-### HTTP Server
-
-Here is a toy script that prints `HELO` on console and forwards its own content to any HTTP client
-
-Try it via both your browser and `curl`!
-
-```bash
-#!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
-
-set -o pipefail
-
-ADDR='127.0.0.1'
-PORT='8888'
-if [[ -t 0 ]]; then
-  printf -- '%q ' curl -- "http://$ADDR":"$PORT"
-  printf -- '\n'
-  exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"
-fi
-
-tee <<-EOF
-HTTP/1.1 200 OK
-
-EOF
-
-printf -- '%s\n' 'HELO' >&2
-exec -- cat -- "$0"
-```
 
 #### Observations
 
@@ -190,60 +235,11 @@ i.e.
 
 builtin quoting for recursion
 
-```bash
-printf -- '%q ' $'\n ' '#$123' '\@!-_'
-# $'\n'\  \#\$123 \\@\!-_
-```
-
-##### Python
-
-Python's `shlex` in stdlib outputs more legible outputs
-
-```python
-from shlex import join
-
-print(join(("\n ", "#$123", r"\@!-_")))
-# '
-#  ' '#$123' '\@!-_'
-```
-
-##### Ruby
-
-You can really see the `perl` heritage here, both in syntax and in library names.
-
-```ruby
-require 'shellwords'
-
-require 'shellwords'
-
-puts %W[\n#{' '} \#$123 \\@!-_].map(&:shellescape).join ' '
-# '
-# '\  \#\$123 \\@\!-_
-```
-
 ### What about NT?
 
 There is little support for quoting `cmd.exe` grammar.
 
 Powershell is ubiqitious enough though...
-
-##### Powershell
-
-Wow, such Microsoft, much `UTF16-LE`, very `BASE64`.
-
-```ps1
-# UTF16-LE
-$pwsh = @"
-...
-"@
-$argv = @(
-  'powershell.exe'
-  '-NoProfile'
-  '-NonInteractive'
-  '-WindowStyle', 'Hidden'
-  '-EncodedCommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($pwsh))
-)
-```
 
 ## You can write ~~Java~~ Shell in any language
 

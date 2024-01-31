@@ -56,7 +56,7 @@ functions . pointfree . compose
 Programs
 
 ```bash
-program | program  | program
+program | program | program
 ```
 
 ---
