@@ -1,8 +1,8 @@
 # Structured Shell Programming (Recursions, Lambdas, Functional Paradigms)
 
-All the code plus the original defcon604 slides are available at [my github](https://github.com/ms-jpq/defcon604-2023)
+The proposition is simple: **`SHELL` is the most effective programming technique** you can learn, because it's based on **process composition**, it necessarily works at a **higher level** than say compared to Haskell.
 
-The proposition is simple: **`SHELL` is the most effective programming technique** you can learn, because it's based on **process composition**, it necessarily works at a **higher level** than say compared to even Haskell.
+All the code plus the original defcon604 slides are available at [my github](https://github.com/ms-jpq/defcon604-2023)
 
 #### Haskell?
 
@@ -50,31 +50,31 @@ printf -- '%s\n' 'HELO' >&2
 exec -- cat -- "$0"
 ```
 
-#### `#!`: shebang
+### `#!`: shebang
 
 ```bash
 #!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
 ```
 
-- In UNIX systems, `#!` are the magic bytes that denote executable scripts, and it leads to a path i.e. `/usr/bin/env` as the script interpreter. This is fairly well known.
+- In UNIX systems, `#!` are the magic bytes at begining of files that denote executable scripts, and it leads to a path i.e. `/usr/bin/env` as the script interpreter. This is fairly well known.
 
 - This isn't all that interesting, but it is underutilized that you pay pass arguments to the script interpreter as well. For example, passing in `perl -CAS` to enable greater unicode support.
 
-#### `[[ -t 0 ]]`: is stdin `(fd 0)` a terminal?
+### `[[ -t 0 ]]`: is stdin `(fd 0)` a terminal?
 
-- The recursion works by checking if the script is run from the terminal, if so, the script re-spawns itself under a subprocess of `socat`, in which it is no longer attached to the terminal.
+- The recursion here works by checking if the script is run from the terminal, if so, the script re-spawns itself under a child process of `socat`, in which it is no longer attached to the terminal.
 
 - The terminal is actually a fairly important concept for in shell programming, as it is the `$SHELL` itself. It poses some **interesting questions**:
 
 1.  - On `ASCII` and strings: How do you _delete_ a character from the terminal, if the terminal is **just another process**? Surely `stdin` is _append only_.
 
-    - As it turns out, `ASCII` has multiple deletion characters: `BS` and `DEL`, what's better, it even has a `BEL` character that will blink your terminal.
+    - As it turns out, `ASCII` has multiple deletion characters: `BS` and `DEL`, what's better, it even has a `BEL ('\a')` character that will blink your terminal.
 
 2.  - So are strings really just text? Or should we view them as _instruction streams_?
 
     - The latter mental model should prove more fruitful for shell programming.
 
-#### `printf -- '%q '`: What kind of format is `%q`?
+### `printf -- '%q '`: What kind of format is `%q`?
 
 Two things are true:
 
@@ -82,11 +82,11 @@ Two things are true:
 
 2.  It is difficult to manually quote arguments in `$SHELL` languages.
 
-The _one-liner solution_:
+The solution:
 
-`%q ` **quotes arguments** to `printf` such that they can **POSIX `SHELL` expand back to their original input**.
+`%q ` **quotes arguments** to `printf` such that they can **`SHELL` expand back to their logical identity**.
 
-This feature is not unique to `bash` and `zsh`. We can examine a few similar facilities to reveal their design philosophies:
+This feature is not unique to `bash` and `zsh`. We can examine a few more languages to reveal their idiosyncrasies:
 
 - **Python**: The quoted string is the most legible of the bunch.
 
@@ -108,17 +108,21 @@ puts %W[\n#{' '} \#$123 \\@!-_].map(&:shellescape).join ' '
 # '\  \#\$123 \\@\!-_
 ```
 
-- **Bash**: Note the quoted string contains **no line breaks**, unlike `python` and `ruby`. This is essential, since `bash` like other `$SHELL` languages is fundamentally **line / record oriented**. Line breaks have a special significance in `$SHELL`.
+- **Bash**: Observe that the quoted string is **a single line**, unlike `python` and `ruby`. This is deliberate, since `bash` like other `$SHELL` languages is fundamentally **line / record oriented**. Line breaks carry special currency in `$SHELL`, and need to be used **judiciously**.
+
+Note: this is _NOT POSIX compliant_, due to `$'<string>'` being a bash extension.
 
 ```bash
 printf -- '%q ' $'\n ' '#$123' '\@!-_'
 # $'\n'\  \#\$123 \\@\!-_
 ```
 
-- **PowerShell**: Wow, such Microsoft, much `UTF16-LE`, very `BASE64`, and yes, it can recursively quote itself for execution as well.
+- **PowerShell**: Wow, such Microsoft, much `UTF16-LE`, very `BASE64`.
+
+Note: For escaping in general, `printf -- %s "$STRING" | base64 -d | "$SHELL"` is never a bad strategy. Since `base64 -d` is fairly ubiquitous.
 
 ```ps1
-# UTF16-LE
+# Must be UTF16-LE encoded
 $pwsh = @"
 ...
 "@
@@ -131,81 +135,208 @@ $argv = @(
 )
 ```
 
-#### `exec -- socat`: Back to HTTP server
+### `exec -- socat TCP-LISTEN:"$PORT,bind=$ADDR",reuseaddr,fork EXEC:"$0"`
 
----
+Three 🐓 (birds) one 🗿 (line).
 
-## What is Shell Programming
+- **`exec --`, `EXEC:`**: "exec\*" family of _syscalls_: **replace** current process with new process:
 
-There is a distinct difference between **written in** shell and written **for shell**.
+  - As a consequence of this **short-circuiting** behavior, we can author syntactically valid multi-language scripts:
 
-Shell programming is characterized by _process composition_ as much as say functional programming is characterized by _function composition_.
+#### Julia
 
-Indeed, just as it is possible to write Java in any language, it is also possible to write shell programs in any language. [Scroll to the end]() to see the same basic shell program in 15 different languages, along with some remarks on each.
+As long as they have `#` as part of the comment syntax.
 
-### Homoplasies to Functional Programming & RAII (in the Rust sense)
+```julia
+#!/usr/bin/env -S -- bash -Eeuo pipefail -O dotglob -O nullglob -O extglob -O failglob -O globstar
+#=
+set -x
+JULIA_DEPOT_PATH="$(mktemp)"
+export -- JULIA_DEPOT_PATH
+exec -- julia "$0" "$@"
+=#
 
-This part is pretty boring compared to **recursion**.
+print(@__FILE__)
+```
 
-Read it at the end [here]().
+#### Rust
+
+Some languages like Javascript or Rust, specifically allow `#!` shebang even if the `#` is not part of the comment syntax.
+
+Often, they will have `//` as the comment start, and due to `POSIX` path normalization, we can use `//usr/bin/true;` as a **NOOP**, followed by the actual script.
+
+```rust
+#!/usr/bin/env -S -- bash -Eeuo pipefail
+//usr/bin/true; rustc --edition=2021 -o "${T:="$(mktemp)"}" -- "$0" && exec -a "$0" -- "$T" "$0" "$@"
+
+#![deny(clippy::all, clippy::cargo, clippy::pedantic)]
+
+fn main() {
+// make build.rs executable!
+}
+```
+
+#### Swift
+
+In `BASH` specifically, `exec -a '<arg0>'` is used to set the **first argument** of the new process. Which conventionally is the **name of the executable**. (even under NT!)
+
+This enables the polyglot script to _pass-through_ `argv[0]`.
+
+```swift
+#!/usr/bin/env -S -- bash -Eeuo pipefail
+//usr/bin/true; swiftc -o "${TMPFILE:="$(mktemp)"}" -- "$0" && exec -a "$0" -- "$TMPFILE" "$@"
+
+let arg0 = CommandLine.arguments.first!
+print(arg0)
+```
+
+- **`$0`**: `argv[0]` (first argument)
+
+  - Conventionally `ARGV[0]` is always present.
+
+  - This has two important implications:
+
+    1. Since we invoke programs by their name, we can use `ARGV[0]` to **perform recursion** as well as dispatch multi-call binaries like busybox.
+
+    2. For scripts, conventionally the name of the script just happens to be the **path to itself**. This allows scripts have **knowledge of their own location**, and access resources relative to itself.
+
+- **`fork`**: `fork` is another _syscall_. It **duplicates** the current process. That is to imply, ⇒ **parallelism**.
+
+  - Since `$SHELL` programming is fundamentally **process oriented**, `fork` is the basis for concurrency, rather than threads, or coroutines.
+
+  - Without `,fork`, `socat` will terminate upon a single connection.
+
+### `tee <<-'EOF'`
+
+`tee<<-'EOF'` is a _here-doc_, it prints content between `EOF...EOF` to stdout. Notably, as a child of `socat`, bash's `/dev/stdout` (file) actually writes to the file descriptor of the **TCP socket** provisioned by `socat`.
+
+- Recall the UNIX mantra: **everything is a file**, and that **files are commutable with other files**.
+
+- Files and **file systems** is a recurring theme in effective `$SHELL` programming, especially with regard to IPC.
+
+  - Atomic transactions: POSIX `rename`, `reflink`, `link`, `symlink`, `rename`, `mkdir`, `flock`, etc.
+
+  - "Consequence free" zone: `tmpfs` (in RAM FS): `/run`, `/tmp`
+
+  - Constant time operations: `reflink` (xfs, apfs), `snapshot` (zfs, btrfs), etc.
+
+`HTTP/1.1 200 OK\r\n\r\n` is the minimal valid HTTP response header, and whatever follows is the response body.
+
+- Curiously we never used `\r\n` in our script, only `\n`, and yet it works.
+
+  - Almost all HTTP clients support malformed responses.
+
+- Exploit The **Postel's law**: "Be conservative in what you do, be liberal in what you accept from others".
+
+  - Take advantage of the UNIX world of emergent & ossified protocols.
+
+## Recursion is cool, but who gives a shit
+
+_Who the fuck_ uses **`$SHELL` recursion** on a daily basis?
+
+Probably **((you))**, if you use `SSH`.
+
+```bash
+ssh '<user@host>' '...' '<arguments>' '...'
+```
+
+```bash
+"$SHELL" '->' ssh (client) '->' sshd (server) '->' "$SHELL"
+```
+
+However trivial the `ssh`'s arguments are, a login `$SHELL` → login `$SHELL` **recursion** always takes place, even in the degenerate case of zero arguments.
+
+Percipiently, every argument passed to the local ssh client i.e. `'...' '<arguments>' '...'` are **evaluated and expanded** by the remote `$SHELL`.
+
+Thus, for non-trivial arguments ⇉ `printf -- '%q '`.
+
+## Homoplasies to Structural / Functional Programming
+
+There is a persistent myth: that shell programs are only good for quick and dirty
 
 <figure>
   <img src="https://github.com/ms-jpq/defcon604-2023/blob/main/pics/homology.png?raw=true">
   <figcaption>
-    yes I know <code>homology &lt;&gt; homoplasy</code>, but <code>homology</code> has prettier illustrations
+    yes I know <code>homology != homoplasy</code>, but <code>homology</code> has prettier illustrations on wikipedia
   <figcaption>
 </figure>
 
----
+## `$SHELL` is built from lambdas??
 
-## Recursion
+_**YES: Almost everything in `$SHELL` outside of control flow and redirection is a pseudo-process**_
 
-_Who the fuck_ uses shell recursion on a daily basis?
-
-Probably **((you))**, if you use `SSH`.
-
-SSH spawns the login shell on the server, and passes whitespace joined arguments verbatim from client to server.
-
-```bash
-# Typical interactive SSH usage
-shell | ssh->sshd | shell
+```txt
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣤⣤⣶⣤⣤⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣿⣿⣿⣿⡿⠋⠉⠛⠛⠛⠿⣿⠿⠿⢿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⡀⢀⣽⣷⣆⡀⠙⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣷⠶⠋⠀⠀⣠⣤⣤⣉⣉⣿⠙⣿⠀⢸⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⠁⠀⠀⠴⡟⣻⣿⣿⣿⣿⣿⣶⣿⣦⡀⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢨⠟⡿⠻⣿⠃⠀⠀⠀⠻⢿⣿⣿⣿⣿⣿⠏⢹⣿⣿⣿⢿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣼⣷⡶⣿⣄⠀⠀⠀⠀⠀⢉⣿⣿⣿⡿⠀⠸⣿⣿⡿⣷⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⡿⣦⢀⣿⣿⣄⡀⣀⣰⠾⠛⣻⣿⣿⣟⣲⡀⢸⡿⡟⠹⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⠞⣾⣿⡛⣿⣿⣿⣿⣰⣾⣿⣿⣿⣿⣿⣿⣿⣿⡇⢰⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠀⣿⡽⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⠿⣍⣿⣧⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣷⣿⣿⣿⣿⣿⣿⣿⣿⣷⣮⣽⣿⣷⣙⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⣹⡿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡧⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡆⠀⠀⠀⠀⠀⠀⠀⠉⠻⣿⣿⣾⣿⣿⣿⣿⣿⣿⡶⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⡴⠞⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠚⣿⣿⣿⠿⣿⣿⠿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⢀⣠⣤⠶⠚⠉⠉⠀⢀⡴⠂⠀⠀⠀⠀⠀⠀⠀⠀⢠⠀⠀⢀⣿⣿⠁⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠞⠋⠁⠀⠀⠀⠀⣠⣴⡿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⠀⠀⣾⣿⠋⠀⢠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⡀⠀⠀⢀⣷⣶⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣆⣼⣿⠁⢠⠃⠈⠓⠦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⣿⣿⡛⠛⠿⠿⠿⠿⠿⢷⣦⣤⣤⣤⣦⣄⣀⣀⠀⢀⣿⣿⠻⣿⣰⠻⠀⠸⣧⡀⠀⠉⠳⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠛⢿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠙⠛⠿⣦⣼⡏⢻⣿⣿⠇⠀⠁⠀⠻⣿⠙⣶⣄⠈⠳⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠈⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⣐⠀⠀⠀⠈⠳⡘⣿⡟⣀⡠⠿⠶⠒⠟⠓⠀⠹⡄⢴⣬⣍⣑⠢⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢀⣀⠐⠲⠤⠁⢘⣠⣿⣷⣦⠀⠀⠀⠀⠀⠀⠙⢿⣿⣏⠉⠉⠂⠉⠉⠓⠒⠦⣄⡀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠈⣿⣿⣷⣯⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⢦⣷⡀⠀⠀⠀⠀⠀⠀⠉⠲⣄⠀
+⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢦⠀⢹⣿⣏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢻⣷⣄⠀⠀⠀⠀⠀⠀⠈⠳
+⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⣸⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣽⡟⢶⣄⠀⠀⠀⠀⠀
+⠯⠀⠀⠀⠒⠀⠀⠀⠀⠀⠐⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⡄⠈⠳⠀⠀⠀⠀
+⠀⠀⢀⣀⣀⡀⣼⣤⡟⣬⣿⣷⣤⣀⣄⣀⡀⠀⠀⠀⠀⠀⠀⠈⣿⣿⡄⣉⡀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⣿⣿⣄⠀⣀⣀⡀⠀
 ```
 
-Even if most interactive uses of `SSH` passes zero arguments, the trivial recursion from your shell to the remote shell still takes place.
+### Case Study: `process1 | λ | process2 | process3`
 
-But before we do something useful, let's do something fun instead :)
+- **`process1`**: Print deleted files in git with `commit-id` followed by repeated `file-name` for each commit.
 
-#### Observations
+- **`lambda`**: Associate each `file-name` with the `commit-id` that deleted it.
 
-##### Exploiting the Postel's law
+- **`process2 | process3`**: Encrypt the deleted file uniquely identified via `commit-id:file-name`.
 
-`be conservative in what you do, be liberal in what you accept from others`
+```bash
+HEAD=1
+git log --diff-filter=D --name-only --pretty='format:%h' -z | while read -d '' -r LINE; do
+  if [[ -z "$LINE" ]]; then
+    HEAD=1
+    continue
+  fi
+  if ((HEAD)); then
+    SHA="${LINE%%$'\n'*}"
+    LINE="${LINE#*$'\n'}"
+    HEAD=0
+  fi
+  printf -- '%s\0' "$SHA^:$LINE"
+done | xargs -r -0 -n 1 -- git show | gpg --encrypt --armor
+```
 
-1. `HTTP/1` is TCP + `HTTP` headers + newline + body
+- Notice for the `λ` section, only `$SHELL` built-ins was used.
 
-2. The specified `\r` in `\r\n` in HTTP protocol isn't required in practice, when most clients are written to accept a liberal interpretation of it
+  - `λ` effectively acts as part of the pipe
 
-3. Think, the UNIX world of (in)formal protocols
+```bash
+#!/usr/bin/env -S -- zsh
 
-##### `$0`
+die() {
+  printf -- '%s\n' "$0"
+  return 88
+}
 
-1. The first argument of a process (`$0`) is conventionally, their own name. This works in almost all languages, on all `OS` (yes even in Microsoft land).
+die
+printf -- '%s\n' $?
+```
 
-2. Recursion is performed via `$0`, which is almost always present, for example `python` wouldn't even let you call [`os.exec*`]() without it.
-
-3. Famously `busybox` is a multi-call binary that distills many `gnu-coreutils` into a single executable based on invocations of `$0`
-
-### Back to SSH
-
-#### Recursive arguments
-
-Notice in the HTTP example, there is a peculiar `printf` format: `%q`
-
-If we were to look up `printf(1)` in the `glibc`, consepectiously, there is no `%q`.
-
-As it turns out, `%q` is a `bash` / `gnu` extension to `printf` that transforms a string into a format that when evulated under the `posix` shell syntax, expands to it's own (logical) identity.
-
-i.e. built for recursive evulation.
+---
 
 ### Emgenrent Protocol -- Posix SH
 
@@ -225,21 +356,6 @@ i.e.
 - [`fzf --execute ...`](fzf)
 
 **Never quote by hand**, especially for nested recursions
-
-<summary>
-<detail>
-</detail>
-</summary>
-
-##### Bash
-
-builtin quoting for recursion
-
-### What about NT?
-
-There is little support for quoting `cmd.exe` grammar.
-
-Powershell is ubiqitious enough though...
 
 ## You can write ~~Java~~ Shell in any language
 
@@ -348,10 +464,6 @@ I have written the same basic shell program in 15 languages, with
 ## λ
 
 ---
-
-## Homoplasies
-
-### RAII
 
 ### Referential Transparency
 
