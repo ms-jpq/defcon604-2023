@@ -22,11 +22,30 @@ process1 | process2 | process3
 
 My goals in this essay isn't to explore the quirks of the `SHELL` programming languages, of which there are many. Rather, this is a distillation of the useful **semantics of process composition**.
 
+## Homoplasies to Structural / Functional / Logical Programming
+
+There is this perception: that `$SHELL` programs are **unstructured**, **primitive**, and **impotent**.
+
+I used to, quite strongly held onto that belief, that is until I became more acquainted with first `fsharp`, `clojure` and later on `prolog`, and started to see the **homoplasies** between these languages and `$SHELL`.
+
+<figure>
+  <img src="https://github.com/ms-jpq/defcon604-2023/blob/main/pics/homology.png?raw=true">
+  <figcaption>
+    yes I know <code>homology != homoplasy</code>, but <code>homology</code> has prettier illustrations on wikipedia
+  <figcaption>
+</figure>
+
+The proposition is simple: **It is hard to perform recursion without some coherent structure**.
+
+Through both interesting and constructive examples, I will demonstrate the **homoplasies** that `$SHELL` has with the more regarded programming paradigms.
+
 ---
 
 ## Case Study: Recursive Bash HTTP Server
 
-For pedagogical purposes, this is my favorite program. I will break down the _interesting bits_.
+Before I bore you to death with practical knowledge, there is an _amusing amount of depth_ in this toy HTTP server.
+
+For pedagogical purposes, this is my favorite program. Please allow me to break down the **_interesting bits_**.
 
 ```bash
 #!/usr/bin/env -S -- bash -Eeu -O dotglob -O nullglob -O extglob -O failglob -O globstar
@@ -78,19 +97,17 @@ exec -- cat -- "$0"
 
 Two things are true:
 
-1.  Recursion is difficult without argument passing.
+1.  **Recursion is difficult without argument passing**.
 
 2.  It is difficult to manually quote arguments in `$SHELL` languages.
 
-The solution:
+#### The solution:
 
-`%q ` **quotes arguments** to `printf` such that they can **`SHELL` expand back to their logical identity**.
+`%q ` **quotes arguments** to `printf` such that they can **`$SHELL` expand back to their logical identity**.
 
 This feature is not unique to `bash` and `zsh`. We can examine a few more languages to reveal their idiosyncrasies:
 
 - **Python**: The quoted string is the most legible of the bunch.
-
-- **Ruby**: You can really see the `perl` heritage here, both in syntax and in library names.
 
 ```python
 from shlex import join
@@ -99,6 +116,8 @@ print(join(("\n ", "#$123", r"\@!-_")))
 # '
 #  ' '#$123' '\@!-_'
 ```
+
+- **Ruby**: You can really see the `perl` heritage here, both in syntax and in library names.
 
 ```ruby
 require 'shellwords'
@@ -110,7 +129,7 @@ puts %W[\n#{' '} \#$123 \\@!-_].map(&:shellescape).join ' '
 
 - **Bash**: Observe that the quoted string is **a single line**, unlike `python` and `ruby`. This is deliberate, since `bash` like other `$SHELL` languages is fundamentally **line / record oriented**. Line breaks carry special currency in `$SHELL`, and need to be used **judiciously**.
 
-Note: this is _NOT POSIX compliant_, due to `$'<string>'` being a bash extension.
+  - Note: this is _NOT POSIX compliant_, due to `$'<string>'` being a bash extension.
 
 ```bash
 printf -- '%q ' $'\n ' '#$123' '\@!-_'
@@ -119,7 +138,7 @@ printf -- '%q ' $'\n ' '#$123' '\@!-_'
 
 - **PowerShell**: Wow, such Microsoft, much `UTF16-LE`, very `BASE64`.
 
-Note: For escaping in general, `printf -- %s "$STRING" | base64 -d | "$SHELL"` is never a bad strategy. Since `base64 -d` is fairly ubiquitous.
+  - Note: For escaping in general, `printf -- %s "$STRING" | base64 -d | "$SHELL"` is never a bad strategy. Since `base64 -d` is fairly ubiquitous.
 
 ```ps1
 # Must be UTF16-LE encoded
@@ -145,7 +164,7 @@ Three 🐓 (birds) one 🗿 (line).
 
 #### Julia
 
-As long as they have `#` as part of the comment syntax.
+- - As long `^#` is a part of the comment syntax.
 
 ```julia
 #!/usr/bin/env -S -- bash -Eeuo pipefail -O dotglob -O nullglob -O extglob -O failglob -O globstar
@@ -161,9 +180,9 @@ print(@__FILE__)
 
 #### Rust
 
-Some languages like Javascript or Rust, specifically allow `#!` shebang even if the `#` is not part of the comment syntax.
+- - Some languages like Javascript or Rust, specifically allow `#!` shebang even if the `#` is not part of the comment syntax.
 
-Often, they will have `//` as the comment start, and due to `POSIX` path normalization, we can use `//usr/bin/true;` as a **NOOP**, followed by the actual script.
+    - Often, they will have `//` as the comment start, and due to `POSIX` path normalization, we can use `//usr/bin/true;` as a **NOOP**, followed by the actual script.
 
 ```rust
 #!/usr/bin/env -S -- bash -Eeuo pipefail
@@ -178,9 +197,9 @@ fn main() {
 
 #### Swift
 
-In `BASH` specifically, `exec -a '<arg0>'` is used to set the **first argument** of the new process. Which conventionally is the **name of the executable**. (even under NT!)
+- - In `BASH` specifically, `exec -a '<arg0>'` is used to set the **first argument** of the new process. Which conventionally is the **name of the executable**. (even under NT!)
 
-This enables the polyglot script to _pass-through_ `argv[0]`.
+    - This enables the polyglot script to _pass-through_ `argv[0]`.
 
 ```swift
 #!/usr/bin/env -S -- bash -Eeuo pipefail
@@ -204,7 +223,7 @@ print(arg0)
 
   - Since `$SHELL` programming is fundamentally **process oriented**, `fork` is the basis for concurrency, rather than threads, or coroutines.
 
-  - Without `,fork`, `socat` will terminate upon a single connection.
+  - Without `,fork`, `socat` will terminate upon a single TCP connection.
 
 ### `tee <<-'EOF'`
 
@@ -248,18 +267,30 @@ However trivial the `ssh`'s arguments are, a login `$SHELL` → login `$SHELL` *
 
 Percipiently, every argument passed to the local ssh client i.e. `'...' '<arguments>' '...'` are **evaluated and expanded** by the remote `$SHELL`.
 
-Thus, for non-trivial arguments ⇉ `printf -- '%q '`.
+Thus, for non-trivial arguments ⇉ use `printf -- '%q '`.
 
-## Homoplasies to Structural / Functional Programming
+### Emergent Protocol -- POSIX sh
 
-There is a persistent myth: that shell programs are only good for quick and dirty
+Similar to how the ubiquity of `C` made its `.h` headers the universal FFI API, the ubiquity of the `int system(const char *command)` has made the `POSIX` shell an accidental API in of itself.
 
-<figure>
-  <img src="https://github.com/ms-jpq/defcon604-2023/blob/main/pics/homology.png?raw=true">
-  <figcaption>
-    yes I know <code>homology != homoplasy</code>, but <code>homology</code> has prettier illustrations on wikipedia
-  <figcaption>
-</figure>
+For any arbitrary `UNIX` program, if it has a mechanism for spawning processes as a single string, chances are, the arguments to the parent program are carried over more or less verbatim into
+the system shell, or via the `$SHELL` environ.
+
+_i.e.:_
+
+- [`GIT_SSH_COMMAND='...' git`](https://manpages.ubuntu.com/manpages/noble/en/man1/git.1.html): pass args to `ssh` under `git`
+
+- [`PAGER='...', EDITOR='...', VISUAL=...`](https://manpages.ubuntu.com/manpages/noble/en/man7/environ.7.html): various standard environmental variables
+
+- [`FZF_DEFAULT_COMMAND='...', fzf --preview '...', fzf --execute '...'`](https://manpages.ubuntu.com/manpages/noble/man1/fzf.1.html): `fzf`'s preview, execute, and search commands
+
+- [`rsync --rsh '...'`](https://manpages.ubuntu.com/manpages/noble/en/man1/rsync.1.html): `rsync`'s tunneling command
+
+- [`ssh -o ProxyCommand='...'`](https://manpages.ubuntu.com/manpages/noble/en/man5/ssh_config.5.html): `ssh`'s tunneling command, i.e. `exec openssl s_client -quiet -connect '%h:%p' -servername "$SNI"`
+
+..., and so on.
+
+## Homoplasies to Structural Programming
 
 ## `$SHELL` is built from lambdas??
 
@@ -336,136 +367,25 @@ die
 printf -- '%s\n' $?
 ```
 
----
+## Homoplasies to Logical Programming
 
-### Emgenrent Protocol -- Posix SH
+### Railway Oriented Programming
 
-Similar to how the ubiquity of C made its `.h` headers the universal FFI API, the ubiquity of the `int system(const char *command)` has made the `posix` shell an accidental API in of itself.
+```bash
+asd
+```
 
-Basically, for any given `unix` program, if it has an mechanism for spawning processes, chances are, the arguments to the parent program are carried over more or less verbatim into
-the system shell.
-
-i.e.
-
-- [`ssh -o ProxyCommand=...`](ssh_config)
-
-- [`rsync --rsh ...`](rsync)
-
-- [`fzf --preview ...`](fzf)
-
-- [`fzf --execute ...`](fzf)
-
-**Never quote by hand**, especially for nested recursions
-
-## You can write ~~Java~~ Shell in any language
-
-I have written the same basic shell program in 15 languages, with
-
-## prolog
-
-- `++++` Cool as shit
-
-- `++` Fast interpertor spin up
-
-- `+` Shares the same (yes -> continue / no -> abort) execution model as `bash -eux -o pipefail ...`
-
-- `+` `DCG` is vastly more superior to `regex` for parsing complex grammar, esp with recursion
-
-- `-` Poor tooling
-
-- `---` Good luck using it in prod
-
-## python
-
-- `+++++` Legendary stdlib
-
-- `+++` Best built-in argument parser of any language
-
-- `++` Excellent tooling
-
-- `-` Poor pipelining support
-
-## clojure
-
-- `+++` Beautiful language
-
-- `-` Shell programming is orthogonal to Clojure's strengths
-
-- `--` Slow JVM spin up
-
-## perl
-
-- `+++` Available almost anywhere `bash` is
-
-- `++` Cool boomercore language.
-
-- `--` Unicode support hidden behind flags, so nobody uses them, especially in shebangs.
-
-## ruby
-
-- `+++` Most powerful built-in templating of any language (erb).
-
-- `++` Passable stdlib, including decent pipelining & rake (ruby's Make)
-
-- `++` More sane version of `perl`
-
-- `-` Working with raw bytes an after thought
-
-## nodejs
-
-- `+++` Stream oriented + `async function*`
-
-- `++` Fast interpertor spin up
-
-- `---` Stdlib is sucky
-
-## powershell
-
-- `++` Access to `.NET` stdlib
-
-- `-` Poor tooling
-
-- `---` SLOW as hell interpertor spin up for a shell language
-
-## fsharp
-
-- `--` Enterprisy stdlib
-
-- `+` Pretty decent tooling actually
-
-## haskell
-
-- `++` Beautiful language.
-
-- `--` Form over function
-
-- `---` Really slow compile time when running via shebang
-
-## lua
-
-## R
-
-## php
-
-- `--` Is `php`
-
-## rust
-
-- `+` If it passes `#![deny(clippy::all, clippy::pedantic)]`, it work good
-
-- `---` Only ever going to be used to make `build.rs` executable
-
-## kotlin
-
-- `-----` Some how slower than julia at `Hello World`
-
----
-
-## λ
-
----
+## Homoplasies to Functional Programming
 
 ### Referential Transparency
+
+## TLDR
+
+---
+
+## You can write ~~Java~~ `$SHELL` in any language
+
+- Skip to **`#TLDR`**
 
 ## Systemd Socket Programming
 
