@@ -28,7 +28,7 @@ My goals in this essay isn't to explore the quirks of the `SHELL` programming la
 
 There is a perception: that `$SHELL` programs are **unstructured**, **primitive**, and **impotent**.
 
-While there is some truth to this, in that the majority of `$SHELL` programming is done rather haphazardly. It is nevertheless a misunderestimation of an entire paradigm.
+While there is some truth to this, in that the majority of `$SHELL` programming is written rather haphazardly. It is nevertheless a misunderestimation of an entire paradigm.
 
 <figure>
   <img src="https://github.com/ms-jpq/defcon604-2023/blob/main/pics/homology.png?raw=true">
@@ -164,6 +164,8 @@ Three 🐓 (birds) one 🗿 (line).
 
 - **`exec --`, `EXEC:`**: ["exec\*" family of _syscalls_](https://manpages.ubuntu.com/manpages/noble/en/man3/exec.3.html): **replace** current process with new process:
 
+  - Analogous to tail call optimization when used for recursion.
+
   - As a consequence of this **short-circuiting** behavior, we can author syntactically valid multi-language scripts, i.e.:
 
 #### Julia
@@ -231,9 +233,9 @@ print(arg0)
 
 ### `tee <<-'EOF'`
 
-`tee<<-'EOF'` is a _here-doc_, it prints content between `EOF…EOF` to stdout. Notably, as a child of `socat`, bash's `/dev/stdout` (file) actually writes to the file descriptor of the **TCP socket** provisioned by `socat`.
+`tee<<-'EOF'` is a _here-doc_, a special syntax that prints content between `EOF…EOF` to the `/dev/stdin` of `tee`. Notably, as a child of `socat`, `tee`'s `/dev/stdout` actually writes to the file descriptor of the **TCP socket** provisioned by `socat`.
 
-- Recall the UNIX mantra: **everything is a file**, and that files are IO streams. We can derive that **files are commutable with other files via IO streams**.
+- Recall the UNIX mantra: **everything is a file**, and that since files are IO streams, we can derive that **files are commutable with other files via IO streams**.
 
   - Since `std{in,out,err}` are blocking, process composition is blessed by **_implicit end to end back pressure_**.
 
@@ -243,11 +245,11 @@ print(arg0)
 
   - Take advantage of "consequence free" directories: [`tmpfs`](https://manpages.ubuntu.com/manpages/noble/en/man5/tmpfs.5.html) (RAM FS) - `/run`, `/tmp`
 
-`HTTP/1.1 200 OK\r\n\r\n` is the minimal spec compliant HTTP response header, and whatever follows is the response body.
+`HTTP/1.1 200 OK\r\n\r\n` is the minimal spec compliant HTTP response header, it must proceed any response body.
 
-- Curiously we never used `\r\n` in our script, only `\n`, and yet the HTTP server still works.
+- Curiously we never used `\r\n` in the heredoc of our script, only `\n`, and yet the HTTP server is still functional.
 
-  - Almost all HTTP clients support malformed responses.
+  - Almost all HTTP clients tolerate "malformed" responses.
 
 - Exploit The **Postel's law**: "Be conservative in what you do, be liberal in what you accept from others".
 
@@ -259,7 +261,7 @@ print(arg0)
 
 _Who the fuck_ uses **`$SHELL` recursion** on a daily basis?
 
-Probably **((you))**, if you use `SSH`.
+Probably **(((you)))**, if you use `SSH`.
 
 ```bash
 ssh '<user@host>' '…' '<arguments>' '…'
@@ -272,13 +274,13 @@ ssh '<user@host>' '…' '<arguments>' '…'
 
 However trivial the `ssh` client's arguments are, a login `$SHELL` → login `$SHELL` **recursion** always takes place, even in the degenerate case of zero arguments.
 
-Percipiently, every argument passed to the local ssh client i.e. `'…' '<arguments>' '…'` are **evaluated and expanded** by the remote `$SHELL`.
+Percipiently, every argument passed to the local ssh client i.e. `'…' '<arguments>' '…'` are first **evaluated and expanded** by the local `$SHELL`, **and once more** by the remote `$SHELL`.
 
 Thus, for non-trivial arguments ⇉ use `printf -- '%q '`.
 
 ### Emergent Protocol -- POSIX sh
 
-Similar to how the ubiquity of `C` made its calling convention the universal [FFI API](https://doc.rust-lang.org/nomicon/ffi.html), the ubiquity of the `int system(const char *command)` has made the `POSIX` `$SHELL` an accidental API in of itself.
+Similar to how the ubiquity of `C` made its calling convention the universal [FFI API](https://doc.rust-lang.org/nomicon/ffi.html), the ubiquity of the [`int system(const char *command)`](https://manpages.ubuntu.com/manpages/noble/en/man3/system.3posix.html) has made the `POSIX` `$SHELL` an incidental standard API in of itself.
 
 For any arbitrary `UNIX` program, if it has a mechanism for spawning processes as a single argument, chances are, the arguments to the parent program are carried over more or less verbatim into
 the system `/bin/sh`, or via the `$SHELL` environ.
@@ -293,9 +295,9 @@ _i.e.:_
 
 - [`parallel -- '…'`](https://manpages.ubuntu.com/manpages/noble/en/man7/parallel_tutorial.7.html): gnu parallel straight up has a `--quote` command to help with escaping.
 
-- [`rsync --rsh '…'`](https://manpages.ubuntu.com/manpages/noble/en/man1/rsync.1.html): `rsync`'s tunneling command.
+- [`rsync --rsh '…'`](https://manpages.ubuntu.com/manpages/noble/en/man1/rsync.1.html): `rsync`'s tunneling proxy process.
 
-- [`ssh -o ProxyCommand='…'`](https://manpages.ubuntu.com/manpages/noble/en/man5/ssh_config.5.html): `ssh`'s tunneling command, i.e. `exec openssl s_client -quiet -connect '%h:%p' -servername "$SNI"`, SSL wrapping SSH, for SNI routing through TCP proxies like nginx.
+- [`ssh -o ProxyCommand='…'`](https://manpages.ubuntu.com/manpages/noble/en/man5/ssh_config.5.html): `ssh`'s tunneling command, i.e. `exec openssl s_client -quiet -connect '%h:%p' -servername "$SNI"`: SSL wrapping SSH, for SNI routing through TCP proxies like nginx.
 
 ..., and so on.
 
@@ -338,9 +340,9 @@ _**YES: Almost everything in `$SHELL` outside of control flow and redirection is
 
 ### Case Study: `process1 | process2 | λ | process3{4*}`
 
-**Objective:** I want to recursively defragment a [btrfs file system](https://btrfs.readthedocs.io), which have arbitrary subvolumes.
+**Objective:** I want to defragment a [btrfs file system](https://btrfs.readthedocs.io), which have arbitrary subvolumes.
 
-**Obstacles:**
+**Challenges:**
 
 1. `btrfs defragment -r -- '…'` is not recursive for btrfs [subvolumes](https://btrfs.readthedocs.io/en/latest/Subvolumes.html).
 
@@ -374,11 +376,11 @@ DEFRAG=(btrfs -v filesystem defragment -r -- %)
 } | "${PARALLEL[@]}" "${DEFRAG[@]}"
 ```
 
-### `λ` Control Flow
+### `λ` as Control Flow
 
 Notice the following:
 
-1. The `while <condition>` tests for a `$SHELL` built-in, `read -- VOL`, which assigns each row into `$VOL` variable.
+1. The `while <condition>` tests for a `$SHELL` built-in, `read -- VOL`, which assigns each row into the `$VOL` variable.
 
    - When no more lines can be assigned. `read` **returns 1**
 
@@ -388,17 +390,19 @@ Notice the following:
 
 Wait a minute, **why is there a link on `false`**???
 
-Recall the section in polyglot scripts, where we used [`//usr/bin/true`](https://manpages.ubuntu.com/manpages/noble/en/man1/true.1.html) as a NOOP, because it always exits 0; `false` ⇾ `/usr/bin/false`, always exit 1.
+Recall the section in polyglot scripts, where we used [`//usr/bin/true`](https://manpages.ubuntu.com/manpages/noble/en/man1/true.1.html) as a NOOP, because it always exits 0, likewise `false` ⇾ `/usr/bin/false`, always exit 1.
 
-- **conditions in `$SHELL` are just `λ` exit codes**
+- **Conditions in `$SHELL` are just `λ` exit codes**
 
   - 0: Success, !0: Failure
 
-  - Almost all built-ins in `$SHELL` has an exit code → processes lite
+- Almost all built-ins in `$SHELL` has an exit code → part of being pseudo-processes.
+
+  - `/usr/bin/true`, `/usr/bin/false`, [`/bin/test`](https://manpages.ubuntu.com/manpages/noble/en/man1/test.1.html), `/bin/[` (of `[ -f "$FILE" ]`) exist because some `$SHELL` don't even bother to implement them.
 
 ### `λ` IO
 
-Notice that the **`while` loop is fact capable of IO**. We can even redirect it's output into other processes.
+Notice that the **`while` loop is fact capable of piped IO**. We can even redirect it's output into other processes.
 
 - Conceptually, `$SHELL` loops can be seen as stream transformers, similar to generators say in `python` or `ruby`.
 
@@ -413,6 +417,10 @@ Typical golden path `$SHELL` script.
 - Set `$SHELL` to early abort for unhandled `non-zero` exits.
 
   - Analogous to `throwing` on exceptions.
+
+  - If final exit code is `0`, great success!
+
+- Alternative is the equivalent of `if err != nil` for every fallible statement, 🤮
 
 ```txt
 `tree -- ./4-pipeline`
@@ -441,7 +449,7 @@ Typical golden path `$SHELL` script.
 
 - Wrap `<fallible code>` with `if`.
 
-  - Recall _processes are functions_.
+  - Recall _processes are like functions_.
 
 ```bash
 if ! [[ -v RECUR ]]; then
@@ -456,6 +464,21 @@ fi
 ```
 
 #### Fan-out Concurrency
+
+- Unify producer & processor pipeline in single script
+
+```mermaid
+flowchart LR
+  producer --> filter
+  filter --> process1
+  filter --> process2
+  filter --> process3
+  filter --> process4
+```
+
+- We can extrapolate using `RECUR=2`, `RECUR=3` and so forth to for additional pipeline stages.
+
+  - Use [`gnuparallel`](https://manpages.ubuntu.com/manpages/noble/en/man7/parallel_tutorial.7.html) for fan-in, anything else probably sucks.
 
 ```bash
 PRODUCE=(...)
@@ -472,19 +495,29 @@ fi
 
 ---
 
-## Homoplasies to Structured Programming
+## Homoplasies to Structured Concurrency
 
-Taking a leaf out of the excellent essay by Nathaniel J. Smith's of python's [trio](https://github.com/python-trio/trio) async framework:
+Taking a leaf out of the excellent essay by Nathaniel J. Smith's of python's [trio async framework](https://github.com/python-trio/trio):
 
 [Notes on structured concurrency, or: Go statement considered harmful](https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/)
 
 - ~~Functions~~ processes are the core constituents of structured programming:
 
-  - stack unwinding ↔ process termination ⇉ guaranteed resource deallocation.
+- stack unwinding ↔ process termination ⇉ guaranteed resource deallocation
 
-  - absence of `goto` ↔ isolated memory space ⇉ localization of error conditions / reasonability
+- absence of `goto` ↔ isolated resource space ⇉ localization of failure modes / reasonability
 
-  - consolidation of concurrent control flows ⇉ conservation of exit.
+- consolidation of concurrent execution
+
+  - conservation of abstraction
+
+    - **pipes are monoids** in the category of processes
+
+      - `cat, tee` are the identity operators
+
+  - conservation of [signal](https://manpages.ubuntu.com/manpages/noble/en/man2/signal.2.html) cascades
+
+    - Robust handling of UNIX [signals & process termination](https://catern.com/process.html) in general is a 
 
 ### Data Types
 
