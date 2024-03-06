@@ -1,4 +1,4 @@
-# Structured Shell Programming (Recursions, Lambdas, Functional Paradigms)
+# Structured Shell Programming (Recursions, Lambdas, Concurrency, Functional Paradigms)
 
 The proposition is simple: **`SHELL` is the most effective programming technique** you can learn, because it's based on **process composition**, it necessarily works at a **higher level** than say compared to Haskell.
 
@@ -21,6 +21,8 @@ process1 | process2 | process3
 ```
 
 My goals in this essay isn't to explore the quirks of the `SHELL` programming languages, of which there are many. Rather, this is a distillation of the useful **semantics of process composition**.
+
+---
 
 ## Homoplasies to Structured / Functional / SQL Programming
 
@@ -251,6 +253,8 @@ print(arg0)
 
   - Take advantage of the UNIX world of emergent & ossified protocols.
 
+---
+
 ## Recursion is cool, but who gives a shit
 
 _Who the fuck_ uses **`$SHELL` recursion** on a daily basis?
@@ -285,7 +289,7 @@ _i.e.:_
 
 - [`GIT_SSH_COMMAND='…' git`](https://manpages.ubuntu.com/manpages/noble/en/man1/git.1.html): pass args to `ssh` under `git`.
 
-- [`PAGER='…', EDITOR='…', VISUAL='…'`](https://manpages.ubuntu.com/manpages/noble/en/man7/environ.7.html): various *standard environmental variables*.
+- [`PAGER='…', EDITOR='…', VISUAL='…'`](https://manpages.ubuntu.com/manpages/noble/en/man7/environ.7.html): various _standard environmental variables_.
 
 - [`parallel -- '…'`](https://manpages.ubuntu.com/manpages/noble/en/man7/parallel_tutorial.7.html): gnu parallel straight up has a `--quote` command to help with escaping.
 
@@ -295,21 +299,9 @@ _i.e.:_
 
 ..., and so on.
 
-## Homoplasies to Structured Programming
+---
 
-Taking a leaf out of Nathaniel J. Smith's the excellent essay that captured the raison d'etre of Python's [trio](https://github.com/python-trio/trio) async framework, and whose features have been [incorperated into the standard library](https://github.com/python/cpython/issues/90908):
-
-[Notes on structured concurrency, or: Go statement considered harmful](https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/)
-
-- ~~Functions~~ processes are the core constituents of structured programming:
-
-  - Stack unwinding ↔ process termination ⇉ guaranteed resource dallocation.
-
-  - Absence of `goto` ↔ memory space isolation ⇉ preservation of error boundaries.
-
-  - Consolidation of concurrent control flows ⇉ conservation of abstraction.
-
-### `$SHELL` is built from lambdas??
+## `$SHELL` is built from lambdas??
 
 _**YES: Almost everything in `$SHELL` outside of control flow and redirection is a pseudo-process**_
 
@@ -344,9 +336,9 @@ _**YES: Almost everything in `$SHELL` outside of control flow and redirection is
 ⠀⠀⢀⣀⣀⡀⣼⣤⡟⣬⣿⣷⣤⣀⣄⣀⡀⠀⠀⠀⠀⠀⠀⠈⣿⣿⡄⣉⡀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⣿⣿⣄⠀⣀⣀⡀⠀
 ```
 
-### Case Study: `process1 | process2 | λ | process3*`
+### Case Study: `process1 | process2 | λ | process3{4*}`
 
-**Objective:** I want to recursively defragment a [btrfs file system](https://btrfs.readthedocs.io).
+**Objective:** I want to recursively defragment a [btrfs file system](https://btrfs.readthedocs.io), which have arbitrary subvolumes.
 
 **Obstacles:**
 
@@ -358,9 +350,9 @@ _**YES: Almost everything in `$SHELL` outside of control flow and redirection is
 
 - **`process1 | process2`**: List all subvolumes.
 
-- **`lambda`**: Print path to subvolume, unless subvolume is readonly.
+- **`lambda`**: Print path of subvolume, unless subvolume is readonly.
 
-- **`process3*`**: For each subvolume,
+- **`process3{4*}`**: Concurrently, for each printed subvolume, defragment.
 
 ```bash
 set -o pipefail
@@ -375,39 +367,57 @@ DEFRAG=(btrfs -v filesystem defragment -r -- %)
   printf -- '%s\0' "$SUBVOLUME"
   "${LIST[@]}" | "${PICK[@]}" | while read -r -- VOL; do
     VOL="$SUBVOLUME/$VOL"
-    if btrfs property get -- "$VOL" ro | grep -F -- 'ro=false' >/dev/null; then
+    if btrfs property get -- "$VOL" ro | grep --fixed-strings -- 'ro=false' >/dev/null; then
       printf -- '%s\0' "$VOL"
     fi
   done
 } | "${PARALLEL[@]}" "${DEFRAG[@]}"
 ```
 
-- Notice for the `λ` section, only `$SHELL` built-ins was used.
+### `λ` Control Flow
 
-  - `λ` effectively acts as part of the pipe
+Notice the following:
 
-```bash
-#!/usr/bin/env -S -- zsh
+1. The `while <condition>` tests for a `$SHELL` built-in, `read -- VOL`, which assigns each row into `$VOL` variable.
 
-die() {
-  printf -- '%s\n' "$0"
-  return 88
-}
+   - When no more lines can be assigned. `read` **returns 1**
 
-die
-printf -- '%s\n' $?
-```
+2. The `if <condition>` tests the exit code of the `btrfs … | grep …` pipeline.
 
-### Stack Unwinding
+   - When either `btrfs …` or `grep …` **exits non-zero**, the `if` condition evaluates to [`false`](https://manpages.ubuntu.com/manpages/noble/en/man1/false.1.html).
 
-### Data Types
+Wait a minute, **why is there a link on `false`**???
 
-## Homoplasies to Logical Programming
+Recall the section in polyglot scripts, where we used [`//usr/bin/true`](https://manpages.ubuntu.com/manpages/noble/en/man1/true.1.html) as a NOOP, because it always exits 0; `false` ⇾ `/usr/bin/false`, always exit 1.
 
-What if Prolog had no backtracking?
+- **conditions in `$SHELL` are just `λ` exit codes**
+
+  - 0: Success, !0: Failure
+
+  - Almost all built-ins in `$SHELL` has an exit code → processes lite
+
+### `λ` IO
+
+Notice that the **`while` loop is fact capable of IO**. We can even redirect it's output into other processes.
+
+- Conceptually, `$SHELL` loops can be seen as stream transformers, similar to generators say in `python` or `ruby`.
+
+- Similarly, most `$SHELL` constructs are also IO capable pseudo-processes, hence the **`λ`** designation.
+
+### Extrapolate with Recursions
+
+#### Try-Catch Error Handling
+
+Typical golden path `$SHELL` script.
+
+- Set `$SHELL` to early abort for unhandled `non-zero` exits.
+
+  - Analogous to `throwing` on exceptions.
 
 ```txt
-4-pipeline
+`tree -- ./4-pipeline`
+
+./4-pipeline
 └── are we on track?
     ├── 0
     │   └── are we on track?
@@ -426,8 +436,61 @@ What if Prolog had no backtracking?
     └── 1
         └── ☠️
 
-2 directories, 5 files
+12 directories, 5 files
 ```
+
+- Wrap `<fallible code>` with `if`.
+
+  - Recall _processes are functions_.
+
+```bash
+if ! [[ -v RECUR ]]; then
+  if UNDER=1 "$0" "$@"; then
+    # .then(() => {})
+  else
+    # .catch(() => {})
+  fi
+else
+  # fallible code
+fi
+```
+
+#### Fan-out Concurrency
+
+```bash
+PRODUCE=(...)
+FANOUT=(xargs --no-run-if-empty --null --max-args 1 --max-procs 0 --)
+
+if ! [[ -v RECUR ]]; then
+  "${PRODUCE[@]}" | while read -r -d '' -- RECORD; do
+  # filter
+  done | RECUR=1 "${FANOUT[@]}" "$0" "$@"
+else
+  # consume
+fi
+```
+
+---
+
+## Homoplasies to Structured Programming
+
+Taking a leaf out of the excellent essay by Nathaniel J. Smith's of python's [trio](https://github.com/python-trio/trio) async framework:
+
+[Notes on structured concurrency, or: Go statement considered harmful](https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/)
+
+- ~~Functions~~ processes are the core constituents of structured programming:
+
+  - stack unwinding ↔ process termination ⇉ guaranteed resource deallocation.
+
+  - absence of `goto` ↔ isolated memory space ⇉ localization of error conditions / reasonability
+
+  - consolidation of concurrent control flows ⇉ conservation of exit.
+
+### Data Types
+
+## Homoplasies to Logical Programming
+
+What if Prolog had no backtracking?
 
 ## Homoplasies to Functional Programming
 
