@@ -79,7 +79,7 @@ exec -- cat -- "$0"
 
 - In UNIX systems, `#!` are the magic bytes at beginning of files that denote executable scripts, and it leads to a path i.e. `/usr/bin/env` as the script interpreter. This is fairly well known.
 
-- This isn't all that interesting, but what's less well known is that many `/usr/bin/env` implements have a `-S`, `--split-string` flag that splits the shebang line, allowing for succinct argument passing. For example, passing in `perl -CAS` to enable greater unicode support.
+- This isn't all that interesting, but what's less well known is that many `/usr/bin/env` implements have a `-S`, `--split-string` flag that splits the shebang line, allowing for succinct argument passing. For example, passing in `perl -CAS` to enable [greater Unicode support](https://manpages.ubuntu.com/manpages/noble/en/man1/perl.1.html).
 
 ### `[[ -t 0 ]]`: is stdin `(fd 0)` a terminal?
 
@@ -186,7 +186,7 @@ print(@__FILE__)
 
 #### Rust
 
-- - Some languages like Javascript or Rust, specifically allow `#!` shebang even if the `#` is not part of the comment syntax.
+- - Some languages like JavaScript or Rust, specifically allow `#!` shebang even if the `#` is not part of the comment syntax.
 
     - Often, they will have `//` as the comment start, and due to `POSIX` path normalization, we can use `//usr/bin/true;` as a **NOOP**, followed by the actual script.
 
@@ -369,7 +369,7 @@ DEFRAG=(btrfs -v filesystem defragment -r -- %)
   printf -- '%s\0' "$SUBVOLUME"
   "${LIST[@]}" | "${PICK[@]}" | while read -r -- VOL; do
     VOL="$SUBVOLUME/$VOL"
-    if btrfs property get -- "$VOL" ro | grep --fixed-strings -- 'ro=false' >/dev/null; then
+    if btrfs property get -- "$VOL" ro | grep --fixed-strings --quiet -- 'ro=false'; then
       printf -- '%s\0' "$VOL"
     fi
   done
@@ -517,7 +517,7 @@ Taking a leaf out of the excellent essay by Nathaniel J. Smith's of python's [tr
 
   - conservation of [signal](https://manpages.ubuntu.com/manpages/noble/en/man2/signal.2.html) cascades
 
-    - Robust handling of UNIX [signals & process termination](https://catern.com/process.html) in general is a 
+    - Robust handling of UNIX [signals & process termination](https://catern.com/process.html) in general is a
 
 ### Data Types
 

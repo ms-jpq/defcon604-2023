@@ -12,7 +12,7 @@ DEFRAG=(btrfs -v filesystem defragment -r -- %)
   printf -- '%s\0' "$SUBVOLUME"
   "${LIST[@]}" | "${PICK[@]}" | while read -r -- VOL; do
     VOL="$SUBVOLUME/$VOL"
-    if btrfs property get -- "$VOL" ro | grep --fixed-strings -- 'ro=false' >/dev/null; then
+    if btrfs property get -- "$VOL" ro | grep --fixed-strings --quiet -- 'ro=false'; then
       printf -- '%s\0' "$VOL"
     fi
   done
